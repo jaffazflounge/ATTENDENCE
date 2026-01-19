@@ -8,28 +8,37 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <style>
-        body { background: #2c3e50; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; color: white; padding: 20px; }
-        #reader { width: 100%; max-width: 400px; background: black; border: 5px solid #3498db; border-radius: 10px; overflow: hidden; }
-        .info-box { background: white; color: black; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 20px; width: 100%; max-width: 350px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        body { background: #2c3e50; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; color: white; }
+        #reader { width: 300px; height: 300px; background: black; border: 5px solid #3498db; }
+        .info-box { background: white; color: black; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 20px; width: 80%; max-width: 350px; }
         .hidden { display: none; }
-        .btn { padding: 12px 25px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 16px; margin-top: 15px; cursor: pointer; font-weight: bold; }
-        #statusMsg { font-weight: bold; margin-top: 10px; }
+        .btn { padding: 12px 20px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 16px; margin-top: 10px; cursor: pointer; font-weight: bold; }
+        #selfieCanvas { display: none; }
+        #cameraPreview { width: 100%; border-radius: 10px; border: 3px solid #3498db; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="info-box">
-        <h3>📷 Attendance Scanner</h3>
-        <p id="statusMsg">Align QR Code inside the frame</p>
+    <div class="info-box" id="msgBox">
+        <h3 id="mainHeading">📷 Attendance System</h3>
+        <p id="statusMsg">Waiting for QR Code...</p>
     </div>
 
     <div id="reader"></div>
+
+    <div id="selfieSection" class="info-box hidden">
+        <h4 style="margin-top:0">Take a Selfie for Identity</h4>
+        <video id="cameraPreview" autoplay playsinline></video>
+        <canvas id="selfieCanvas"></canvas>
+        <button class="btn" id="captureBtn" onclick="takePhoto()">📸 Take Photo & Submit</button>
+        <p id="uploadMsg" style="color: blue; font-size: 14px;"></p>
+    </div>
     
     <div id="resultBox" class="info-box hidden">
-        <h2 style="color:green">✅ Marked!</h2>
-        <p id="empNameDisplay"></p>
+        <h2 style="color:green">✅ Attendance Marked!</h2>
+        <p id="empName"></p>
         <p id="markTime"></p>
-        <button class="btn" onclick="location.reload()">Scan Another</button>
+        <button class="btn" onclick="location.reload()">Done</button>
     </div>
 
     <script>
@@ -45,33 +54,71 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // --- CAMERA SCANNER LOGIC ---
-        function onScanSuccess(decodedText) {
-            // QR Code scan hote hi yahan processing hogi
-            try {
-                // Link se data nikalna (id, name, v)
-                const url = new URL(decodedText);
-                const id = url.searchParams.get('id');
-                const name = url.searchParams.get('name');
-                const validDate = url.searchParams.get('v');
-                const today = new Date().toISOString().slice(0, 10);
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        const name = urlParams.get('name');
+        const validDate = urlParams.get('v');
+        const today = new Date().toISOString().slice(0, 10);
 
-                if(id && name && validDate === today) {
-                    html5QrcodeScanner.clear(); // Camera band kar dein
-                    markAttendance(id, name);
-                } else {
-                    alert("❌ Invalid or Expired QR Code!");
-                }
-            } catch (e) {
-                console.error("Not a valid URL");
+        let videoStream = null;
+
+        // --- STEP 1: INITIAL LOGIC ---
+        if(id && name && validDate) {
+            document.getElementById('reader').classList.add('hidden');
+            if(validDate !== today) {
+                document.getElementById('statusMsg').innerText = "❌ QR Code Expired!";
+                document.getElementById('statusMsg').style.color = "red";
+            } else {
+                startSelfieMode();
+            }
+        } else {
+            const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            html5QrcodeScanner.render((text) => { window.location.href = text; });
+        }
+
+        // --- STEP 2: OPEN CAMERA FOR SELFIE ---
+        async function startSelfieMode() {
+            document.getElementById('statusMsg').innerText = "Identify Yourself";
+            document.getElementById('selfieSection').classList.remove('hidden');
+            
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }, 
+                    audio: false 
+                });
+                document.getElementById('cameraPreview').srcObject = videoStream;
+            } catch (err) {
+                alert("Camera access denied! Please allow camera to mark attendance.");
+                console.error(err);
             }
         }
 
-        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-        html5QrcodeScanner.render(onScanSuccess);
+        // --- STEP 3: CAPTURE PHOTO ---
+        function takePhoto() {
+            const video = document.getElementById('cameraPreview');
+            const canvas = document.getElementById('selfieCanvas');
+            const context = canvas.getContext('2d');
 
-        function markAttendance(empId, empName) {
-            const date = new Date().toISOString().slice(0, 10);
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imageData = canvas.toDataURL('image/jpeg', 0.7); // Selfie as Base64
+            
+            // Stop camera
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+
+            markAttendance(id, name, imageData);
+        }
+
+        // --- STEP 4: MARK ATTENDANCE ---
+        function markAttendance(empId, empName, selfieData) {
+            document.getElementById('captureBtn').disabled = true;
+            document.getElementById('uploadMsg').innerText = "Uploading & Marking... Please wait.";
+            
+            const date = today;
             const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 
             db.collection("attendance").doc(date + "_" + empId).set({
@@ -79,13 +126,18 @@
                 empName: empName,
                 date: date,
                 time: time,
-                status: "Present"
+                status: "Present",
+                selfie: selfieData // Selfie saved here
             }).then(() => {
-                document.getElementById('reader').classList.add('hidden');
+                document.getElementById('selfieSection').classList.add('hidden');
+                document.getElementById('msgBox').classList.add('hidden');
                 document.getElementById('resultBox').classList.remove('hidden');
-                document.getElementById('empNameDisplay').innerText = "Employee: " + empName;
+                document.getElementById('empName').innerText = empName;
                 document.getElementById('markTime').innerText = "Time: " + time;
-            }).catch(e => alert("Error: " + e.message));
+            }).catch(e => {
+                alert("Error: " + e.message);
+                document.getElementById('captureBtn').disabled = false;
+            });
         }
     </script>
 </body>
