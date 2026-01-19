@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Employee System (Final)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* --- STYLE --- */
+        :root { --primary-color: #2c3e50; --secondary-color: #34495e; --accent-color: #3498db; --text-light: #ecf0f1; --success: #27ae60; --danger: #c0392b; --warning: #f39c12; --info: #1abc9c; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; height: 100vh; background-color: #f4f7f6; }
+        
+        /* Sidebar */
+        .sidebar { width: 260px; background-color: var(--primary-color); color: var(--text-light); display: flex; flex-direction: column; padding: 20px; }
+        .app-brand { text-align: center; margin-bottom: 30px; border-bottom: 2px solid var(--secondary-color); padding-bottom: 20px; }
+        .app-logo { width: 80px; height: 80px; object-fit: contain; border-radius: 50%; background: white; padding: 5px; margin-bottom: 10px; }
+        .app-title { font-size: 18px; font-weight: bold; display: block; }
+        
+        .menu-btn { background: none; border: none; color: var(--text-light); padding: 15px; text-align: left; cursor: pointer; font-size: 16px; border-radius: 5px; margin-bottom: 10px; transition: 0.3s; display: flex; align-items: center; gap: 10px; }
+        .menu-btn:hover, .menu-btn.active { background-color: var(--secondary-color); border-left: 5px solid var(--accent-color); }
+        
+        /* Main Content */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .section { display: none; }
+        .section.active { display: block; }
+        h1 { color: var(--primary-color); border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        /* Forms */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .full-width { grid-column: span 2; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        label { font-size: 13px; font-weight: bold; color: var(--secondary-color); }
+        button.action-btn { background-color: var(--accent-color); color: white; padding: 12px 25px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 15px; width: 100%; }
+        button.action-btn.update-mode { background-color: var(--warning); color: white; }
+        button.action-btn:hover { opacity: 0.9; }
+        
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; font-size: 14px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: middle; }
+        th { background-color: var(--secondary-color); color: white; }
+        .emp-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 50%; border: 2px solid var(--secondary-color); background: #eee; cursor: zoom-in;}
+        
+        /* Buttons */
+        .btn-sm { border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: white; margin-right: 2px; font-size: 12px;}
+        .btn-view { background-color: var(--info); }
+        .btn-edit { background-color: var(--warning); }
+        .btn-delete { background-color: var(--danger); }
+        .btn-restore { background-color: var(--success); }
+        .btn-qr { background-color: #8e44ad; color: white; }
+        
+        /* Status Badges */
+        .fine-text { color: var(--danger); font-weight: bold; font-size: 11px; display: block; margin-top: 2px; }
+        .half-day { color: var(--warning); font-weight: bold; }
+        .absent-auto { color: var(--danger); font-weight: bold; text-decoration: underline; }
+        .stats-badge { font-size: 11px; background: #eee; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-top: 3px; border: 1px solid #ccc; }
+
+        /* Modals */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        .modal-content { background-color: #fff; padding: 25px; border-radius: 10px; width: 600px; max-width: 90%; box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center; position: relative; max-height: 85vh; overflow-y: auto; }
+        .close-modal { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #aaa; }
+        
+        /* Face Match Styles */
+        .face-compare { display: flex; justify-content: space-around; margin-bottom: 15px; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
+        .face-box { width: 45%; }
+        .face-box img { width: 100%; height: 150px; object-fit: contain; border: 1px solid #ddd; background: white; border-radius: 5px; cursor: zoom-in; }
+        .face-label { font-size: 12px; font-weight: bold; display: block; margin-bottom: 5px; color: #555; }
+
+        #qrcode { display: flex; justify-content: center; margin: 20px 0; }
+        
+        /* Zoom Lightbox */
+        #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 2000; justify-content: center; align-items: center; cursor: zoom-out; }
+        #lightbox img { max-width: 90%; max-height: 90%; border: 2px solid white; box-shadow: 0 0 20px black; }
+        
+        .history-table { width: 100%; font-size: 12px; text-align: left; border: 1px solid #eee; }
+        .history-table th { background: #eee; color: #333; padding: 5px; }
+        .history-table td { border-bottom: 1px solid #eee; padding: 5px; }
+    </style>
+</head>
+<body>
+<div id="securityScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#2c3e50; z-index:9999999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white;">
+    <h2 style="font-family:sans-serif; margin-bottom:20px;">🔒 SYSTEM LOCKED</h2>
+    <p>Please enter PIN to access Employee System</p>
+    <input type="password" id="sysPin" placeholder="Enter PIN" style="padding:10px; font-size:20px; text-align:center; width:200px; border-radius:5px; border:none; margin-bottom:15px;">
+    <button onclick="unlockSystem()" style="padding:10px 25px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">UNLOCK</button>
+</div>
+<script>
+    function unlockSystem() {
+        var p = document.getElementById('sysPin').value;
+        if(p === "746242") {
+            document.getElementById('securityScreen').style.display = 'none';
+        } else {
+            alert("❌ Wrong PIN Code!");
+        }
+    }
+</script>
+    <div class="sidebar">
+        <div class="app-brand">
+            <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" id="mainLogo" class="app-logo">
+            <span id="mainTitle" class="app-title">HR System</span>
+        </div>
+        <button class="menu-btn active" onclick="showSection('employees')">👥 Active Employees</button>
+        <button class="menu-btn" onclick="showSection('attendance')">📅 Attendance</button>
+        <button class="menu-btn" onclick="showSection('leaved')">🚫 Ex-Employees</button>
+        <button class="menu-btn" onclick="showSection('settings')">⚙️ Settings & Rules</button>
+    </div>
+
+    <div class="main-content">
+        
+        <div id="employees" class="section active">
+            <h1>Active Employees</h1>
+            <div class="card">
+                <h3 id="formTitle">Add New Employee</h3>
+                <div class="form-grid">
+                    <div><label>Full Name</label><input type="text" id="empName" placeholder="Enter Name"></div>
+                    <div><label>Designation</label><input type="text" id="empDesignation" placeholder="e.g. Manager"></div>
+                    <div><label>CNIC</label><input type="number" id="empCNIC" placeholder="without dashes"></div>
+                    <div><label>Phone</label><input type="text" id="empPhone" placeholder="0300..."></div>
+                    <div><label>Join Date</label><input type="date" id="empJoinDate"></div>
+                    <div><label>Salary</label><input type="number" id="empSalary"></div>
+                    <div><label>Shift Start</label><input type="time" id="empStartTime" value="09:00"></div>
+                    <div><label>Shift End</label><input type="time" id="empEndTime" value="17:00"></div>
+                    <div class="full-width"><label>Address</label><input type="text" id="empAddress"></div>
+                    <div><label>Ref Photo (For Match)</label><input type="file" id="empPhoto" accept="image/*"></div>
+                    <div><label>CNIC Copy</label><input type="file" id="empCNICPhoto" accept="image/*"></div>
+                </div>
+                <button id="saveBtn" class="action-btn" onclick="processForm()">Save Employee</button>
+                <button id="cancelBtn" class="action-btn" style="background-color: gray; display:none;" onclick="cancelEdit()">Cancel Edit</button>
+            </div>
+
+            <div class="card">
+                <h3>Staff List <button class="btn-sm btn-view" style="float:right;" onclick="downloadEmployeePDF()">📥 PDF List</button></h3>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead><tr><th>Photo</th><th>Name / CNIC</th><th>Shift</th><th>Actions</th></tr></thead>
+                        <tbody id="employeeTableBody"><tr><td colspan="4">Loading data...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="attendance" class="section">
+            <h1>Attendance & QR</h1>
+            <div class="card">
+                <h3>Filter & Reports</h3>
+                <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">
+                    <div><label>Search Employee:</label><input type="text" id="searchEmp" placeholder="Search by Name or CNIC..." onkeyup="loadAttendance()"></div>
+                    <div><label>Select Date:</label><input type="date" id="attDate" onchange="loadAttendance()"></div>
+                    <div style="text-align: right;">
+                        <label>Report Month:</label><input type="month" id="reportMonth" style="width:100%; margin-bottom: 5px;">
+                        <button class="btn-sm btn-qr" style="width:100%;" onclick="downloadMonthlyReport()">📥 Download Report</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <table>
+                    <thead><tr><th>Employee</th><th>Status & Fines</th><th>QR Code</th><th>Manual Action</th></tr></thead>
+                    <tbody id="attendanceTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="settings" class="section">
+            <h1>⚙️ Settings & Rules</h1>
+            
+            <div class="card">
+                <h3>🏢 Branding</h3>
+                <div class="form-grid">
+                    <div><label>Company Name</label><input type="text" id="setCompName" placeholder="My Company"></div>
+                    <div><label>Upload Logo</label><input type="file" id="setLogo" accept="image/*"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>⏳ Fine & Late Rules</h3>
+                <p style="color:gray; font-size:12px;">Customize how the system calculates fines and status.</p>
+                <div class="form-grid">
+                    <div><label>Grace Period (Mins)</label><input type="number" id="ruleGrace" placeholder="e.g. 15"> <small>Late allowed without fine</small></div>
+                    <div><label>Fine Rate (Per Min)</label><input type="number" id="ruleRate" placeholder="e.g. 5"> <small>Rs. per minute fine</small></div>
+                    
+                    <div><label>Tier 1 Limit (Minutes)</label><input type="number" id="ruleTier1" placeholder="e.g. 120 (2 Hours)"></div>
+                    <div><label>Tier 1 Action</label>
+                        <select id="ruleAction1">
+                            <option value="fine">Calculate Per Min Fine</option>
+                            <option value="half">Mark Half Day</option>
+                        </select>
+                    </div>
+
+                    <div><label>Tier 2 Limit (Minutes)</label><input type="number" id="ruleTier2" placeholder="e.g. 380 (6h 20m)"></div>
+                    <div><label>Tier 2 Action</label>
+                        <select id="ruleAction2">
+                            <option value="half">Mark Half Day</option>
+                            <option value="absent">Mark Absent</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="action-btn" onclick="saveSettings()">💾 Save Settings</button>
+            </div>
+        </div>
+
+        <div id="leaved" class="section">
+            <h1>Ex-Employees</h1>
+            <div class="card">
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead><tr><th>Photo</th><th>Name</th><th>Left Date</th><th>Actions</th></tr></thead>
+                        <tbody id="leavedTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="qrModal" class="modal"><div class="modal-content"><span class="close-modal" onclick="closeQrModal()">&times;</span><h2 id="qrTitle">Scan for Attendance</h2><div id="qrcode"></div><p id="qrDateDisplay" style="font-weight:bold; color:var(--accent-color);"></p></div></div>
+    
+    <div id="viewModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2 id="viewName" style="color:var(--primary-color);">Employee Details</h2>
+            
+            <div class="face-compare" id="faceMatchSection" style="display:none;">
+                <div class="face-box">
+                    <span class="face-label">Original Ref Photo</span>
+                    <img id="viewRefImg" src="" onclick="openZoom(this.src)">
+                </div>
+                <div class="face-box">
+                    <span class="face-label" style="color:red">Today's Selfie</span>
+                    <img id="viewSelfieImg" src="" onclick="openZoom(this.src)">
+                </div>
+            </div>
+            
+            <div style="text-align: left; padding: 10px; border-top: 1px solid #eee;">
+                <p><b>CNIC:</b> <span id="viewCNIC"></span></p>
+                <p><b>Phone:</b> <span id="viewPhone"></span></p>
+                <p><b>Shift:</b> <span id="viewShift"></span></p>
+                <p><b>Address:</b> <span id="viewAddress"></span></p>
+                
+                <h3 style="margin-top:20px; border-bottom:1px solid #ddd;">📅 Monthly History</h3>
+                <div id="historyContainer" style="max-height:200px; overflow-y:auto; border:1px solid #eee; padding:5px;">
+                    <table class="history-table">
+                        <thead><tr><th>Date</th><th>Status</th><th>Time</th></tr></thead>
+                        <tbody id="historyTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="lightbox" onclick="closeZoom()"><img id="lightboxImg" src=""></div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDuegsEGAZjfoSecDrLaQNXLQqszY2MQVY",
+            authDomain: "attendence0.firebaseapp.com",
+            projectId: "attendence0",
+            storageBucket: "attendence0.firebasestorage.app",
+            messagingSenderId: "485278266632",
+            appId: "1:485278266632:web:37db1d8c0a2c2586c0a8bd"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // --- GLOBAL VARIABLES ---
+        let employees = [];
+        let leavedEmployees = [];
+        let globalSettings = {
+            compName: "HR System", logo: "", 
+            grace: 10, rate: 5, 
+            tier1: 120, action1: 'fine', 
+            tier2: 380, action2: 'absent'
+        };
+        let editingId = null;
+        let currentViewId = null;
+
+        // Set default dates
+        document.getElementById('attDate').valueAsDate = new Date();
+        document.getElementById('empJoinDate').valueAsDate = new Date();
+        document.getElementById('reportMonth').value = new Date().toISOString().slice(0, 7);
+
+        // --- INITIALIZATION ---
+        function init() {
+            // 1. Listen for Settings
+            db.collection("settings").doc("config").onSnapshot(doc => {
+                if(doc.exists) {
+                    globalSettings = { ...globalSettings, ...doc.data() };
+                    applySettings();
+                }
+            });
+
+            // 2. Listen for Employees
+            db.collection("employees").onSnapshot(snap => {
+                employees = [];
+                snap.forEach(d => employees.push(d.data()));
+                if(document.getElementById('employees').classList.contains('active')) renderEmployees();
+                loadAttendance();
+            });
+
+            // 3. Listen for Ex-Employees
+            db.collection("ex_employees").onSnapshot(snap => {
+                leavedEmployees = [];
+                snap.forEach(d => leavedEmployees.push(d.data()));
+                if(document.getElementById('leaved').classList.contains('active')) renderLeavedEmployees();
+            });
+        }
+        init();
+
+        // --- SETTINGS LOGIC ---
+        function applySettings() {
+            document.getElementById('mainTitle').innerText = globalSettings.compName;
+            if(globalSettings.logo) document.getElementById('mainLogo').src = globalSettings.logo;
+            
+            // Fill Inputs
+            document.getElementById('setCompName').value = globalSettings.compName;
+            document.getElementById('ruleGrace').value = globalSettings.grace;
+            document.getElementById('ruleRate').value = globalSettings.rate;
+            document.getElementById('ruleTier1').value = globalSettings.tier1;
+            document.getElementById('ruleAction1').value = globalSettings.action1;
+            document.getElementById('ruleTier2').value = globalSettings.tier2;
+            document.getElementById('ruleAction2').value = globalSettings.action2;
+        }
+
+        function saveSettings() {
+            const compName = document.getElementById('setCompName').value;
+            const logoInput = document.getElementById('setLogo');
+            
+            const newSettings = {
+                compName: compName,
+                grace: Number(document.getElementById('ruleGrace').value),
+                rate: Number(document.getElementById('ruleRate').value),
+                tier1: Number(document.getElementById('ruleTier1').value),
+                action1: document.getElementById('ruleAction1').value,
+                tier2: Number(document.getElementById('ruleTier2').value),
+                action2: document.getElementById('ruleAction2').value,
+            };
+
+            const save = (logoBase64) => {
+                if(logoBase64) newSettings.logo = logoBase64;
+                else newSettings.logo = globalSettings.logo; 
+                
+                db.collection("settings").doc("config").set(newSettings)
+                    .then(() => alert("Settings Saved & Rules Applied! ✅"))
+                    .catch(e => alert("Error: " + e.message));
+            };
+
+            if(logoInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => save(e.target.result);
+                reader.readAsDataURL(logoInput.files[0]);
+            } else {
+                save(null);
+            }
+        }
+
+        // --- EMPLOYEE CRUD ---
+        function processForm() {
+            const name = document.getElementById('empName').value;
+            const role = document.getElementById('empDesignation').value;
+            const cnic = document.getElementById('empCNIC').value;
+            const phone = document.getElementById('empPhone').value;
+            const joinDate = document.getElementById('empJoinDate').value;
+            const salary = document.getElementById('empSalary').value;
+            const startTime = document.getElementById('empStartTime').value;
+            const endTime = document.getElementById('empEndTime').value;
+            const address = document.getElementById('empAddress').value;
+            const photoInput = document.getElementById('empPhoto');
+            const cnicInput = document.getElementById('empCNICPhoto');
+
+            if(!name || !cnic) return alert("Name and CNIC are required!");
+
+            const saveToDB = (refPhoto, cnicPhoto) => {
+                const data = {
+                    id: editingId || Date.now(),
+                    name, role, cnic, phone, joinDate, salary, 
+                    startTime, endTime, address,
+                    photo: refPhoto, cnicPhoto: cnicPhoto
+                };
+                db.collection("employees").doc(data.id.toString()).set(data)
+                    .then(() => { alert(editingId ? "Updated!" : "Saved!"); cancelEdit(); })
+                    .catch(e => alert("Error: " + e.message));
+            };
+
+            let refPhoto = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png";
+            let cnicPhoto = "https://via.placeholder.com/150?text=No+CNIC";
+
+            // If editing, preserve old photos
+            if(editingId) {
+                const old = employees.find(e => e.id === editingId);
+                if(old) { refPhoto = old.photo; cnicPhoto = old.cnicPhoto || cnicPhoto; }
+            }
+
+            const read = (f) => new Promise(r => { 
+                if(!f) return r(null);
+                const rd = new FileReader(); rd.onload=e=>r(e.target.result); rd.readAsDataURL(f); 
+            });
+
+            Promise.all([read(photoInput.files[0]), read(cnicInput.files[0])]).then(([p1, p2]) => {
+                if(p1) refPhoto = p1;
+                if(p2) cnicPhoto = p2;
+                saveToDB(refPhoto, cnicPhoto);
+            });
+        }
+
+        function renderEmployees() {
+            const tb = document.getElementById('employeeTableBody'); tb.innerHTML='';
+            employees.forEach(e => {
+                tb.innerHTML += `
+                <tr>
+                    <td><img src="${e.photo}" class="emp-thumb" onclick="openZoom(this.src)"></td>
+                    <td><strong>${e.name}</strong><br><small>${e.cnic}</small></td>
+                    <td>${e.startTime} - ${e.endTime}</td>
+                    <td>
+                        <button class="btn-sm btn-view" onclick="viewDetails(${e.id}, 'active')">👁️</button>
+                        <button class="btn-sm btn-edit" onclick="editEmployee(${e.id})">✏️</button>
+                        <button class="btn-sm btn-delete" onclick="moveToLeaved(${e.id})">🚫</button>
+                    </td>
+                </tr>`;
+            });
+            if(employees.length===0) tb.innerHTML = "<tr><td colspan='4'>No data found.</td></tr>";
+        }
+
+        function renderLeavedEmployees() {
+            const tb = document.getElementById('leavedTableBody'); tb.innerHTML='';
+            leavedEmployees.forEach(e => {
+                tb.innerHTML += `
+                <tr>
+                    <td><img src="${e.photo}" class="emp-thumb"></td>
+                    <td>${e.name}<br><small>${e.cnic}</small></td>
+                    <td>${e.leftDate || 'N/A'}</td>
+                    <td>
+                         <button class="btn-sm btn-view" onclick="viewDetails(${e.id}, 'leaved')">👁️</button>
+                         <button class="btn-sm btn-delete" onclick="permanentDelete(${e.id})">🗑️</button>
+                    </td>
+                </tr>`;
+            });
+        }
+
+        function editEmployee(id) {
+            editingId = id;
+            const e = employees.find(x => x.id === id);
+            document.getElementById('empName').value = e.name;
+            document.getElementById('empDesignation').value = e.role;
+            document.getElementById('empCNIC').value = e.cnic;
+            document.getElementById('empPhone').value = e.phone;
+            document.getElementById('empJoinDate').value = e.joinDate;
+            document.getElementById('empSalary').value = e.salary;
+            document.getElementById('empStartTime').value = e.startTime;
+            document.getElementById('empEndTime').value = e.endTime;
+            document.getElementById('empAddress').value = e.address;
+            
+            document.getElementById('formTitle').innerText = "Edit: " + e.name;
+            document.getElementById('saveBtn').innerText = "Update";
+            document.getElementById('saveBtn').classList.add('update-mode');
+            document.getElementById('cancelBtn').style.display = 'inline-block';
+            document.querySelector('.sidebar').scrollIntoView();
+        }
+
+        function cancelEdit() {
+            editingId = null;
+            document.querySelectorAll('#employees input').forEach(i => { if(i.type!='date' && i.type!='time') i.value=''; });
+            document.getElementById('formTitle').innerText = "Add New Employee";
+            document.getElementById('saveBtn').innerText = "Save Employee";
+            document.getElementById('saveBtn').classList.remove('update-mode');
+            document.getElementById('cancelBtn').style.display = 'none';
+        }
+
+        function moveToLeaved(id) {
+            if(prompt("Enter Admin Password:") !== "9988") return;
+            const emp = employees.find(e => e.id === id);
+            if(emp) {
+                emp.leftDate = new Date().toLocaleDateString();
+                db.collection("employees").doc(id.toString()).delete();
+                db.collection("ex_employees").doc(id.toString()).set(emp);
+            }
+        }
+
+        function permanentDelete(id) {
+            if(confirm("Are you sure you want to delete PERMANENTLY?")) {
+                db.collection("ex_employees").doc(id.toString()).delete();
+            }
+        }
+
+        // --- ATTENDANCE & LOGIC ---
+        function loadAttendance() {
+            const date = document.getElementById('attDate').value;
+            const searchTerm = document.getElementById('searchEmp').value.toLowerCase();
+            const tbody = document.getElementById('attendanceTableBody');
+            
+            db.collection("attendance").where("date", "==", date).onSnapshot(snap => {
+                let records = {};
+                snap.forEach(doc => records[doc.data().empId] = doc.data());
+
+                tbody.innerHTML = '';
+                employees.filter(e => e.name.toLowerCase().includes(searchTerm) || e.cnic.includes(searchTerm)).forEach(emp => {
+                    const att = records[emp.id];
+                    let statusHtml = '<span style="color:gray">Not Marked</span>';
+                    
+                    if(att) {
+                        let finalStatus = att.status;
+                        let detailHtml = "";
+
+                        // If marked Present, check time rules
+                        if(att.status === 'Present' && emp.startTime) {
+                            const shiftStart = new Date(date + "T" + emp.startTime);
+                            const actualTime = new Date(date + "T" + att.time);
+                            const diffMins = Math.floor((actualTime - shiftStart) / 60000);
+
+                            if(diffMins > globalSettings.grace) {
+                                // TIER 2 CHECK
+                                if(diffMins > globalSettings.tier2) {
+                                    finalStatus = globalSettings.action2 === 'absent' ? 'Absent (Late)' : 'Half Day';
+                                    detailHtml = `<br><span class="absent-auto">Extremely Late: ${diffMins}m</span>`;
+                                } 
+                                // TIER 1 CHECK
+                                else if (diffMins > globalSettings.tier1) {
+                                    if(globalSettings.action1 === 'half') {
+                                        finalStatus = 'Half Day';
+                                        detailHtml = `<br><span class="half-day">Late: ${diffMins}m</span>`;
+                                    } else {
+                                        const fine = diffMins * globalSettings.rate;
+                                        finalStatus = 'Present';
+                                        detailHtml = `<br><span class="fine-text">Late: ${diffMins}m | Fine: Rs.${fine}</span>`;
+                                    }
+                                } 
+                                // NORMAL FINE
+                                else {
+                                    const fine = diffMins * globalSettings.rate;
+                                    detailHtml = `<br><span class="fine-text">Late: ${diffMins}m | Fine: Rs.${fine}</span>`;
+                                }
+                            } else {
+                                detailHtml = `<br><small style="color:green">On Time</small>`;
+                            }
+                        }
+                        
+                        let color = 'green';
+                        if(finalStatus.includes('Absent')) color = 'red';
+                        if(finalStatus.includes('Half')) color = 'orange';
+
+                        statusHtml = `<span style="color:${color}; font-weight:bold;">${finalStatus}</span> ${detailHtml}`;
+                    }
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>
+                                <strong>${emp.name}</strong><br>
+                                <button class="btn-sm btn-view" onclick="viewHistory(${emp.id})" style="margin-top:5px;">👁️ History</button>
+                                <button class="btn-sm btn-info" onclick="checkFace(${emp.id})" style="margin-top:5px;">📸 Check Face</button>
+                            </td>
+                            <td>${statusHtml}</td>
+                            <td><button class="btn-sm btn-qr" onclick="generateQR(${emp.id}, '${emp.name}')">🔳 QR</button></td>
+                            <td>
+                                <button class="btn-sm btn-restore" onclick="markManual('${emp.id}', '${emp.name}', 'Present')">P</button>
+                                <button class="btn-sm btn-delete" onclick="markManual('${emp.id}', '${emp.name}', 'Absent')">A</button>
+                            </td>
+                        </tr>`;
+                });
+            });
+        }
+
+        function markManual(id, name, status) {
+            const date = document.getElementById('attDate').value;
+            db.collection("attendance").doc(date + "_" + id).set({
+                empId: id, empName: name, date: date, time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }), status: status
+            });
+        }
+
+        // --- FACE & DETAILS & HISTORY ---
+        function checkFace(id) {
+            viewDetails(id, 'active'); // Open Modal to face match
+        }
+        
+        // This function opens the history directly from the Eye Button
+        function viewHistory(id) {
+            viewDetails(id, 'active');
+            // Auto load history
+            setTimeout(() => {
+                viewHistoryInsideModal();
+            }, 500);
+        }
+
+        function viewDetails(id, type) {
+            const list = type === 'active' ? employees : leavedEmployees;
+            const emp = list.find(e => e.id === id);
+            currentViewId = id;
+            document.getElementById('historyContainer').style.display = 'block'; // Show history container
+            
+            const date = document.getElementById('attDate').value;
+            
+            // Get Attendance for Selfie
+            db.collection("attendance").doc(date + "_" + id).get().then(doc => {
+                document.getElementById('viewName').innerText = emp.name;
+                document.getElementById('viewCNIC').innerText = emp.cnic;
+                document.getElementById('viewPhone').innerText = emp.phone;
+                document.getElementById('viewShift').innerText = `${emp.startTime} - ${emp.endTime}`;
+                document.getElementById('viewAddress').innerText = emp.address;
+
+                // Show Ref Photo
+                document.getElementById('viewRefImg').src = emp.photo;
+                document.getElementById('faceMatchSection').style.display = 'flex';
+
+                if(doc.exists && doc.data().selfie) {
+                    document.getElementById('viewSelfieImg').src = doc.data().selfie;
+                } else {
+                    document.getElementById('viewSelfieImg').src = "https://via.placeholder.com/150?text=Not+Marked";
+                }
+                
+                // Clear History Table first
+                document.getElementById('historyTableBody').innerHTML = "";
+                
+                document.getElementById('viewModal').style.display = 'flex';
+                
+                // Load History Immediately
+                viewHistoryInsideModal();
+            });
+        }
+
+        function viewHistoryInsideModal() {
+            const id = currentViewId;
+            const month = document.getElementById('reportMonth').value;
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = "<tr><td colspan='3'>Loading records...</td></tr>";
+
+            db.collection("attendance")
+              .where("empId", "==", id) 
+              .get().then(snap => {
+                  let rows = [];
+                  snap.forEach(doc => {
+                      const d = doc.data();
+                      if(d.date.startsWith(month)) rows.push(d);
+                  });
+                  
+                  rows.sort((a,b) => new Date(a.date) - new Date(b.date));
+                  tbody.innerHTML = '';
+                  if(rows.length === 0) tbody.innerHTML = "<tr><td colspan='3'>No record for this month.</td></tr>";
+                  
+                  rows.forEach(r => {
+                      tbody.innerHTML += `<tr><td>${r.date}</td><td style="color:${r.status==='Present'?'green':'red'}">${r.status}</td><td>${r.time}</td></tr>`;
+                  });
+              });
+        }
+
+        // --- PDF & REPORTS ---
+        function downloadEmployeePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("Active Staff List", 14, 15);
+            
+            const tableData = employees.map(e => [e.name, e.cnic, e.phone, e.salary, `${e.startTime}-${e.endTime}`]);
+            doc.autoTable({
+                head: [['Name', 'CNIC', 'Phone', 'Salary', 'Shift']],
+                body: tableData,
+                startY: 20
+            });
+            doc.save("Employee_List.pdf");
+        }
+
+        function downloadMonthlyReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const month = document.getElementById('reportMonth').value;
+            doc.text(`Monthly Attendance Report: ${month}`, 14, 15);
+
+            db.collection("attendance").where("date", ">=", month+"-01").where("date", "<=", month+"-31").get().then(snap => {
+                let stats = {};
+                employees.forEach(e => stats[e.id] = { name: e.name, P:0, A:0, H:0 });
+
+                snap.forEach(doc => {
+                    const d = doc.data();
+                    if(stats[d.empId]) {
+                        if(d.status === 'Present') stats[d.empId].P++;
+                        else if(d.status === 'Half Day') stats[d.empId].H++;
+                        else stats[d.empId].A++;
+                    }
+                });
+
+                const data = Object.values(stats).map(s => [s.name, s.P, s.A, s.H]);
+                doc.autoTable({
+                    head: [['Name', 'Present', 'Absent', 'Half Day']],
+                    body: data,
+                    startY: 20
+                });
+                doc.save(`Report_${month}.pdf`);
+            });
+        }
+
+        // --- UTILS ---
+        function generateQR(id, name) {
+            document.getElementById('qrModal').style.display = 'flex';
+            document.getElementById('qrcode').innerHTML = "";
+            const today = new Date().toISOString().slice(0, 10);
+            document.getElementById('qrDateDisplay').innerText = "Valid: " + today;
+            
+            // Automatic Link Logic
+            var currentLink = window.location.href.substring(0, window.location.href.lastIndexOf("/"));
+            new QRCode(document.getElementById("qrcode"), { text: `${currentLink}/scan.html?id=${id}&name=${encodeURIComponent(name)}&v=${today}`, width: 200, height: 200 });
+        }
+
+        function showSection(id) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            event.target.classList.add('active');
+            if(id === 'employees') renderEmployees();
+            if(id === 'leaved') renderLeavedEmployees();
+            if(id === 'attendance') loadAttendance();
+        }
+
+        function openZoom(src) { document.getElementById('lightboxImg').src = src; document.getElementById('lightbox').style.display = 'flex'; }
+        function closeZoom() { document.getElementById('lightbox').style.display = 'none'; }
+        function closeModal() { document.getElementById('viewModal').style.display = 'none'; }
+        function closeQrModal() { document.getElementById('qrModal').style.display = 'none'; }
+    </script>
+</body>
+</html>
